@@ -1,82 +1,44 @@
 import pandas as pd
-import spacy
+from sklearn.feature_extraction.text import TfidfVectorizer
+from sklearn.decomposition import NMF, LatentDirichletAllocation
+from bertopic import Bertopic
+from summarization import extractive_summarization
 
-# Example texts
-texts = {
-    'Politics': [
-        "Political decisions shape the direction of a country and its governance.",
-        "International relations encompass the interactions and relationships between nations on a global scale."
-    ],
-    'International Relations': [
-        "The United Nations serves as a platform for dialogue and cooperation among nations.",
-        "Bilateral relations between countries shape foreign policies and impact international trade, security, and cultural exchange."
-    ],
-    'Sports': [
-        "Sports play a crucial role in promoting physical and mental well-being.",
-        "The Olympic Games represent the pinnacle of international sporting events."
-    ],
-    'Arts': [
-        "Artistic expression has been a fundamental part of human culture since ancient times.",
-        "Art museums and galleries serve as essential spaces for preserving and showcasing artistic heritage."
-    ],
-    'Sex': [
-        "Sexuality is a natural and integral aspect of human identity and encompasses a broad spectrum of orientations, desires, and expressions.",
-        "Promoting acceptance, inclusivity, and respect for diverse sexualities is crucial for fostering a more inclusive society."
-    ],
-    'Music': [
-        "Music is a universal language that transcends cultural boundaries and has the power to evoke emotions, unite communities, and tell stories.",
-        "Different genres of music offer unique experiences and reflect the cultural, historical, and social contexts in which they emerged."
-    ]
-}
+def topic_modelin_nmf(df, num_topics):
+    # create a TF-IDF Vectorizer
+    vectorizer = TfidfVectorizer()
+    # fit and transform text data
+    tfidf_matrix = vectorizer.fit_transform(df_extractive_summaries['Summary'])
+    # perform NMF modeling
+    nmf_model = NMF(n_components=num_topics, random_state=42)
+    nmf_topics = nmf_model.fit_transform(tfidf_matrix)
+    nmf_topics_labels = nmf_topics.argmax(axis=1)
+    # add topic label to DataFrame
+    df['NMF_Topic'] = nmf_topics_labels
+    return df
 
-# Convert the texts into a DataFrame
-df = pd.DataFrame([(topic, '. '.join(topic_texts)) for topic, topic_texts in texts.items()], columns=['Topic', 'Texts'])
+def topic_modeling_lda(df, num_topics):
+    # create a TF-IDF Vectorizer
+    vectorizer = TfidfVectorizer()
+    # fit and transform text data
+    tfidf_matrix = vectorizer.fit_transform(df_extractive_summaries['Summary'])
+    # Perform LDA topic modeling
+    lda_model = LatentDirichletAllocation(n_components=num_topics, random_state=42)
+    lda_topics = lda_model.fit_transform(tfidf_matrix)
+    lda_topics_labels = lda_topics.argmax(axis=1)
+    df["LDA Topic"] = lda_topics_labels
+    return df
 
-# Save the DataFrame as a CSV file
-df.to_csv('texts.csv', index=False)
+def topic_modeling_bertopic(df, numtopics):
+    # Perform BERTopic topic modeling
+    bertopic_model = Bertopic(ngram=(1,2), calculate_probabilities=True)
+    bertopic_topics, _ = bertopic_model.fit_transform(df_extractive_summaries['Summary'])
+    df['Bertopic'] = bertopic_topics
+    return df
 
-# Read the CSV file using Pandas
-df_read = pd.read_csv('texts.csv')
+# call the topic modeling functions on extractive summaries DataFrame
+num_topics = 3
+df_extractive_summaries = topic_modelin_nmf(extractive_summarization, num_topics)
+df_extractive_summaries = topic_modelin_lda(extractive_summarization, num_topics)
+df_extractive_summaries = topic_modeling_bertopic(extractive_summarization, num_topics)
 
-# Print the DataFrame
-print(df_read)
-print()
-
-# Extractive Summarization
-def extractive_summarization(text):
-    # load SpaCy English language model
-    nlp = spacy.load("en_core_web_sm")
-    # tokenize text and split into sents
-    doc = nlp(text)
-    sentences = [sent.text for sent in doc.sents]
-    # calculate the desired num of sents for summary based on ratio
-    num_sentences = int(len(sentences) * 0.2)
-    # ensure that num of sentences is at least 1
-    num_sentences = max(num_sentences, 1)
-    # sort sents based on their length
-    sorted_sentences = sorted(sentences, key=len, reverse=True)
-    summary = " ".join(sorted_sentences[:num_sentences])
-    return summary
-
-# summarize text using extractive method
-extractive_summaries = {}
-for topic, topic_texts in texts.items():
-    summaries = []
-    for text in topic_texts:
-        summary = extractive_summarization(text)
-        summaries.append(summary)
-    extractive_summaries[topic] = summaries
-
-# print extractive summaries
-for topic, summaries in extractive_summaries.items():
-    print(f"Topic: {topic}")
-    for i, summary in enumerate(summaries):
-        print(f"Summary {i+1}: {summary}")
-# collect summaries into DataFrame
-summary_data = []
-for topic, summaries in extractive_summaries.items():
-    for i, summary in enumerate(summaries):
-        summary_data.append((topic, i + 1, summary))
-
-df_summaries = pd.DataFrame(summary_data, columns=['Topic', 'Summary Index', 'Summary'])
-print(df_summaries)
